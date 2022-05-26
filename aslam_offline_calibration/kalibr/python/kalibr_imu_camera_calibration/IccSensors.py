@@ -202,7 +202,21 @@ class IccCamera():
     #return an etimate of gravity in the world coordinate frame as perceived by this camera
     def getEstimatedGravity(self):
         return self.gravity_w
-        
+
+    #return observations transform
+    def getTransformFromObservations(self):
+        f = open('observations.txt', 'w')
+        for obs in self.targetObservations:
+            #print("Observation transform: ", obs.time().toSec(), obs.T_t_c().inverse().T() )
+            #print(obs.T_t_c().inverse().t())
+            #print(obs.T_t_c().inverse().q())
+            #print(obs.T_t_c().inverse().C())
+            position = obs.T_t_c().inverse().t()
+            orientation = obs.T_t_c().inverse().C()
+            print(obs.time().toSec(), ' '.join(map(str, position)), ' '.join(map(str, orientation.reshape(-1))), file=f)
+            #print('-'*80)
+
+
     #estimates the timeshift between the camearas and the imu using a crosscorrelation approach
     #
     #approach: angular rates are constant on a fixed body independent of location
@@ -280,6 +294,7 @@ class IccCamera():
         times = np.array([obs.time().toSec()+self.timeshiftCamToImuPrior for obs in self.targetObservations ])                 
         curve = np.matrix([ pose.transformationToCurveValue( np.dot(obs.T_t_c().T(), T_c_b) ) for obs in self.targetObservations]).T
         
+
         if np.isnan(curve).any():
             raise RuntimeError("Nans in curve values")
             sys.exit(0)
@@ -437,6 +452,9 @@ class IccCameraChain():
         
         #use stereo calibration guess if no baselines are provided
         self.initializeBaselines()
+
+        # get observation transform
+        self.getTransformFromObservations()
         
 
     def initializeBaselines(self):
@@ -447,6 +465,7 @@ class IccCameraChain():
             print("Baseline between cam{0} and cam{1} set to:".format(camNr-1,camNr))
             print("T= ", self.camList[camNr].T_extrinsic.T())
             print("Baseline: ", np.linalg.norm(self.camList[camNr].T_extrinsic.t()), " [m]")
+
    
     #initialize a pose spline for the chain
     def initializePoseSplineFromCameraChain(self, splineOrder=6, poseKnotsPerSecond=100, timeOffsetPadding=0.02):
@@ -479,6 +498,10 @@ class IccCameraChain():
     #get an initial estimate of gravity in the world coordinate frame 
     def getEstimatedGravity(self):
         return self.camList[0].getEstimatedGravity()
+
+    #get camera transform from observations
+    def getTransformFromObservations(self):
+        return self.camList[0].getTransformFromObservations()
 
     #return the baseline transformation from camA to camB
     def getResultBaseline(self, fromCamANr, toCamBNr):
